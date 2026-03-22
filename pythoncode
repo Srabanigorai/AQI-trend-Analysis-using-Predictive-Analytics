@@ -1,0 +1,158 @@
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+from sklearn.model_selection import train_test_split
+from sklearn.linear_model import LinearRegression, LogisticRegression
+from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score, accuracy_score, confusion_matrix, classification_report
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.naive_bayes import GaussianNB
+from sklearn.tree import DecisionTreeClassifier
+from sklearn.svm import SVC
+from sklearn.cluster import KMeans
+from sklearn.decomposition import PCA
+
+df = pd.read_csv("AQIindia.csv")
+
+
+print(df.head())
+print(df.info())
+print(df.describe())
+
+print(df.isnull().sum())
+print(X_train.isnull().sum())
+print(y_train.isnull().sum())
+X_train = X_train.dropna()
+y_train = y_train.loc[X_train.index]  
+for col in ['pollutant_min','pollutant_max','latitude','longitude','pollutant_avg']:
+    df[col] = pd.to_numeric(df[col], errors='coerce')
+  df = df.dropna(subset=['pollutant_min','pollutant_max','latitude','longitude','pollutant_avg'])
+X_reg = df[['pollutant_min','pollutant_max','latitude','longitude']]
+y_reg = df['pollutant_avg']
+
+X_train, X_test, y_train, y_test = train_test_split(X_reg, y_reg, test_size=0.2, random_state=42)
+
+lr = LinearRegression()
+lr.fit(X_train, y_train)   
+y_pred = lr.predict(X_test)
+print(X_train.shape, y_train.shape)
+
+mae = mean_absolute_error(y_test, y_pred)
+rmse = np.sqrt(mean_squared_error(y_test, y_pred))
+r2 = r2_score(y_test, y_pred)
+
+print(f"MAE: {mae:.3f}")
+print(f"RMSE: {rmse:.3f}")
+print(f"R²: {r2:.3f}")
+
+plt.figure(figsize=(6,4))
+plt.scatter(y_test, y_pred, alpha=0.7, color="steelblue", edgecolor='k')
+plt.plot([y_test.min(), y_test.max()], [y_test.min(), y_test.max()], 'r--', lw=2)
+plt.xlabel("Actual pollutant_avg")
+plt.ylabel("Predicted pollutant_avg")
+plt.title("Regression: Actual vs Predicted pollutant_avg")
+plt.tight_layout()
+plt.show()
+
+residuals = y_test - y_pred
+plt.figure(figsize=(6,4))
+plt.scatter(y_pred, residuals, alpha=0.7, color="purple", edgecolor='k')
+plt.axhline(0, color='r', linestyle='--')
+plt.xlabel("Predicted pollutant_avg")
+plt.ylabel("Residuals (Actual - Predicted)")
+plt.title("Residuals vs Predicted")
+plt.tight_layout()
+plt.show()
+
+def categorize_aqi(value):
+    if value <= 50:
+        return "Good"
+    elif value <= 100:
+        return "Satisfactory"
+    elif value <= 200:
+        return "Moderate"
+    elif value <= 300:
+        return "Poor"
+    elif value <= 400:
+        return "Very Poor"
+    else:
+        return "Severe"
+
+df['AQICategory'] = df['pollutant_avg'].apply(categorize_aqi)
+
+X_class = df[['pollutant_min', 'pollutant_max', 'latitude', 'longitude']]
+y_class = df['AQICategory']
+
+X_train, X_test, y_train, y_test = train_test_split(X_class, y_class, test_size=0.2, random_state=42, stratify=y_class)
+
+dt = DecisionTreeClassifier(random_state=42)
+dt.fit(X_train, y_train)
+y_pred_dt = dt.predict(X_test)
+
+acc = accuracy_score(y_test, y_pred_dt)
+print(f"Accuracy: {acc:.3f}")
+print("Classification report:")
+print(classification_report(y_test, y_pred_dt))
+cm = confusion_matrix(y_test, y_pred_dt, labels=dt.classes_)
+plt.figure(figsize=(7,5))
+sns.heatmap(cm, annot=True, fmt='d', cmap='Blues',
+            xticklabels=dt.classes_, yticklabels=dt.classes_)
+plt.title("Decision Tree Confusion Matrix")
+plt.xlabel("Predicted")
+plt.ylabel("Actual")
+plt.tight_layout()
+plt.show()
+importances = pd.Series(dt.feature_importances_, index=X_class.columns).sort_values(ascending=False)
+plt.figure(figsize=(6,4))
+sns.barplot(x=importances.values, y=importances.index, hue=importances.index, palette="viridis", legend=False)
+plt.title("Feature importance (Decision Tree)")
+plt.xlabel("Importance")
+plt.ylabel("Feature")
+plt.tight_layout()
+plt.show()
+
+X_cluster = df[['pollutant_min', 'pollutant_max', 'pollutant_avg', 'latitude', 'longitude']]
+kmeans = KMeans(n_clusters=4, random_state=42, n_init='auto')
+df['Cluster'] = kmeans.fit_predict(X_cluster)
+
+
+plt.figure(figsize=(7,5))
+sns.scatterplot(data=df, x='pollutant_avg', y='pollutant_max', hue='Cluster', palette='Set2')
+plt.title("KMeans clustering: pollutant_avg vs pollutant_max")
+plt.xlabel("pollutant_avg")
+plt.ylabel("pollutant_max")
+plt.legend(title="Cluster")
+plt.tight_layout()
+plt.show()
+
+centers = pd.DataFrame(kmeans.cluster_centers_, columns=X_cluster.columns)
+plt.figure(figsize=(7,5))
+sns.scatterplot(data=df, x='pollutant_avg', y='pollutant_max', hue='Cluster', palette='Set2', alpha=0.6)
+plt.scatter(centers['pollutant_avg'], centers['pollutant_max'], s=200, c='black', marker='X', label='Centers')
+plt.title("KMeans clusters with centers")
+plt.xlabel("pollutant_avg")
+plt.ylabel("pollutant_max")
+plt.legend()
+plt.tight_layout()
+plt.show() 
+#  PCA 
+X_pca_input = df[['pollutant_min', 'pollutant_max', 'pollutant_avg', 'latitude', 'longitude']]
+pca = PCA(n_components=2, random_state=42)
+X_pca = pca.fit_transform(X_pca_input)
+cat_codes = df['AQICategory'].astype('category').cat.codes
+cat_labels = df['AQICategory'].astype('category').cat.categories
+
+plt.figure(figsize=(7,5))
+scatter = plt.scatter(X_pca[:,0], X_pca[:,1], c=cat_codes, cmap='viridis', alpha=0.8, edgecolor='k')
+plt.xlabel("PC1")
+plt.ylabel("PC2")
+plt.title("PCA on AQI pollutant features (colored by AQICategory)")
+handles, _ = scatter.legend_elements()
+plt.legend(handles, cat_labels, title="AQI Category", bbox_to_anchor=(1.02, 1), loc='upper left')
+plt.tight_layout()
+plt.show()
+explained = pca.explained_variance_ratio_
+print(f"PCA explained variance ratio: PC1={explained[0]:.3f}, PC2={explained[1]:.3f}, Total={explained.sum():.3f}")
+acc = accuracy_score(y_test, y_pred_dt)
+print(f"Accuracy: {acc:.3f}")
